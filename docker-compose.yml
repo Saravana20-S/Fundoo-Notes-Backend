@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Spring Boot Application
+  app:
+    build: .
+    container_name: fundoo-notes-app
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/fundoo_notes
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=12345
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_ARTEMIS_BROKER_URL=tcp://artemis:61616
+      - SPRING_ARTEMIS_USER=admin
+      - SPRING_ARTEMIS_PASSWORD=admin
+      - FUNDOO_JWT_SECRET=FundooNotesSecretKeyForJwtAuthentication2026FundooNotes
+      - FUNDOO_JWT_EXPIRATION=3600000
+      - FUNDOO_ATTACHMENTS_UPLOAD_DIR=/app/uploads
+    volumes:
+      - app_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      artemis:
+        condition: service_started
+    networks:
+      - fundoo-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: fundoo-postgres
+    environment:
+      POSTGRES_DB: fundoo_notes
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fundoo_notes"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fundoo-network
+
+  # Redis Cache / Data Store
+  redis:
+    image: redis:7-alpine
+    container_name: fundoo-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - fundoo-network
+
+  # Apache ActiveMQ Artemis Message Broker
+  artemis:
+    image: apache/activemq-artemis:latest-alpine
+    container_name: fundoo-artemis
+    environment:
+      ARTEMIS_USER: admin
+      ARTEMIS_PASSWORD: admin
+    ports:
+      - "61616:61616" # Artemis JMS Core Port
+      - "8161:8161"   # Web Console UI
+    volumes:
+      - artemis_data:/var/lib/artemis/data
+    networks:
+      - fundoo-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  artemis_data:
+  app_uploads:
+
+networks:
+  fundoo-network:
+    driver: bridge
